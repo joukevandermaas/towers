@@ -38,7 +38,7 @@ interface Soldier {
   y: number;
   team: Team;
 
-  originalSource: number;
+  history: number[];
   source: number;
   target: number;
 
@@ -87,6 +87,12 @@ export const DefaultGameState: GameState = {
       type: "attack",
       team: "blue",
     }),
+    createTower({
+      x: 6,
+      y: 4,
+      value: 30,
+      type: "attack",
+    }),
   ],
 
   soldiers: [],
@@ -118,11 +124,42 @@ export function createTarget(index: number): Target {
   };
 }
 
+export function moveSoldier(
+  state: GameState,
+  previous: Soldier,
+  sourceIndex: number,
+  targetIndex: number
+): Soldier {
+  let source = state.towers[sourceIndex];
+  let target = state.towers[targetIndex];
+
+  let { x: sx, y: sy } = source;
+  let { x: tx, y: ty } = target;
+
+  let dx = tx - sx;
+  let dy = ty - sy;
+
+  let m = Math.sqrt(dx ** 2 + dy ** 2) * 10;
+
+  return {
+    source: sourceIndex,
+    target: targetIndex,
+    x: source.x,
+    y: source.y,
+    dx: dx / m,
+    dy: dy / m,
+
+    team: previous.team,
+    history: [...previous.history, sourceIndex],
+    attPower: previous.attPower,
+    defPower: previous.defPower,
+  };
+}
+
 export function createSoldier(
   state: GameState,
   sourceIndex: number,
-  targetIndex: number,
-  originalSource?: number
+  targetIndex: number
 ): Soldier {
   let source = state.towers[sourceIndex];
   let target = state.towers[targetIndex];
@@ -139,7 +176,7 @@ export function createSoldier(
     source: sourceIndex,
     target: targetIndex,
     team: source.team,
-    originalSource: originalSource ?? sourceIndex,
+    history: [sourceIndex],
     x: source.x,
     y: source.y,
     attPower: getAttackPower(source),
@@ -301,17 +338,20 @@ export const tick = (state: GameState, view: ViewState): GameState => {
     if (hasPassed(soldier.dx, soldier.dy, soldier.x, soldier.y, tx, ty)) {
       if (target.team === soldier.team) {
         if (target.value === target.maxValue && target.targets.length) {
-          if (soldier.originalSource !== soldier.target) {
+          if (soldier.history.indexOf(soldier.target) === -1) {
             let soldierTarget =
               (target.nextPassThroughTarget + 1) % target.targets.length;
-            newSoldiers.push(
-              createSoldier(
-                s,
-                soldier.target,
-                target.targets[soldierTarget].index,
-                soldier.originalSource
-              )
+
+            let history = soldier.history;
+            history.push(soldier.target);
+            let newSoldier = moveSoldier(
+              s,
+              soldier,
+              soldier.target,
+              target.targets[soldierTarget].index
             );
+
+            newSoldiers.push(newSoldier);
             target.nextPassThroughTarget = soldierTarget;
           }
         } else {
@@ -351,7 +391,9 @@ export const tick = (state: GameState, view: ViewState): GameState => {
         tower.y + 1
       )
     ) {
-      s.hovered = i;
+      if (tower.team !== "none" || s.active !== null) {
+        s.hovered = i;
+      }
     }
 
     // handle click
@@ -370,7 +412,7 @@ export const tick = (state: GameState, view: ViewState): GameState => {
         createTargetConnection(s, s.active, i);
 
         s.active = null;
-      } else {
+      } else if (tower.team !== "none") {
         s.active = i;
         clickedTower = true;
       }
@@ -408,6 +450,11 @@ export const tick = (state: GameState, view: ViewState): GameState => {
         target.ticksSinceUpdate += 1;
       }
 
+      tower.ticksSinceUpdate = 0;
+    }
+
+    if (tower.team === "none") {
+      // don't autotick towers that are not owned
       tower.ticksSinceUpdate = 0;
     }
 
