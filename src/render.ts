@@ -1,9 +1,10 @@
+import { gridToView } from "./helpers";
 import { GameState, Team, Tower, TowerType } from "./tick";
+import { padding, ViewState } from "./view";
 
-const padding = 25;
-const gridPadding = 4;
 const gridColor = "#101e36";
 const connectionColor = "white";
+export const gridPadding = 4;
 
 const teamColors: Record<Team, string> = {
   none: "#7f7f7f",
@@ -26,33 +27,29 @@ interface Connection {
 export const renderFrame = (
   context: CanvasRenderingContext2D,
   prevstate: GameState,
-  state: GameState
+  state: GameState,
+  view: ViewState
 ) => {
-  let { width: cwidth, height: cheight } = context.canvas;
-  let dwidth = cwidth - padding * 2;
-  let dheight = cheight - padding * 2;
-
-  let gridCell = dwidth / state.gridWidth;
-  let gwidth = dwidth;
-  let gheight = state.gridHeight * gridCell;
-
   let ctx = context;
   let towers = state.towers;
   let soldiers = state.soldiers;
 
-  ctx.clearRect(0, 0, cwidth, cheight);
+  ctx.clearRect(0, 0, view.screenWidth, view.screenHeight);
 
   // Draw grid
   ctx.lineWidth = 1;
   ctx.strokeStyle = gridColor;
+  ctx.lineCap = "round";
+
+  let gridCell = view.gridSize;
 
   for (let i = 0; i <= state.gridWidth; i++) {
-    let x = i * gridCell;
-    drawLine(x, 0, x, gheight);
+    let x = i * gridCell + padding;
+    drawLine(x, padding, x, view.gridHeight + padding);
   }
   for (let i = 0; i <= state.gridHeight; i++) {
-    let y = i * gridCell;
-    drawLine(0, y, gwidth, y);
+    let y = i * gridCell + padding;
+    drawLine(padding, y, view.gridWidth + padding, y);
   }
 
   // draw connections
@@ -120,6 +117,8 @@ export const renderFrame = (
   }
 
   // draw soldiers
+  ctx.strokeStyle = "white";
+  ctx.lineWidth = 1;
   for (let i = 0; i < soldiers.length; i++) {
     let soldier = soldiers[i];
     let color = teamColors[soldier.team];
@@ -127,12 +126,20 @@ export const renderFrame = (
     ctx.fillStyle = color;
 
     pathCircle(
-      gridToFrame(soldier.x) + padding,
-      gridToFrame(soldier.y) + padding,
-      gridCell / 5
+      gridToView(view, soldier.x),
+      gridToView(view, soldier.y),
+      gridCell / 10
     );
 
     ctx.fill();
+
+    pathCircle(
+      gridToView(view, soldier.x),
+      gridToView(view, soldier.y),
+      gridCell / 10
+    );
+
+    ctx.stroke();
   }
 
   // draw towers
@@ -143,42 +150,52 @@ export const renderFrame = (
     let tower = towers[i];
     let color = teamColors[tower.team];
 
+    let size = i === state.hovered && i !== state.active ? 1.2 : 1;
+
     ctx.fillStyle = color;
-    fillTower(tower);
+    pathTower(tower, size);
+    ctx.fill();
+
+    if (i === state.active) {
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = 3;
+      pathTower(tower, size);
+      ctx.stroke();
+    }
 
     ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+
     ctx.fillStyle = "white";
 
     let text = tower.value === tower.maxValue ? "max" : tower.value.toString();
 
     ctx.strokeText(
       text,
-      gridToFrame(tower.x) + padding,
-      gridToFrame(tower.y) + padding + gridPadding
+      gridToView(view, tower.x),
+      gridToView(view, tower.y) + gridPadding
     );
     ctx.fillText(
       text,
-      gridToFrame(tower.x) + padding,
-      gridToFrame(tower.y) + padding + gridPadding
+      gridToView(view, tower.x),
+      gridToView(view, tower.y) + gridPadding
     );
   }
 
   // helpers
   function connectCells(x1: number, y1: number, x2: number, y2: number) {
     drawLine(
-      gridToFrame(x1),
-      gridToFrame(y1),
-      gridToFrame(x2),
-      gridToFrame(y2)
+      gridToView(view, x1),
+      gridToView(view, y1),
+      gridToView(view, x2),
+      gridToView(view, y2)
     );
   }
-  function gridToFrame(coord: number): number {
-    return coord * gridCell + gridCell / 2;
-  }
+
   function drawLine(x1: number, y1: number, x2: number, y2: number): void {
     ctx.beginPath();
-    ctx.moveTo(x1 + padding, y1 + padding);
-    ctx.lineTo(x2 + padding, y2 + padding);
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
     ctx.stroke();
   }
   function pathHexagon(x: number, y: number, r: number) {
@@ -197,39 +214,33 @@ export const renderFrame = (
   }
   function pathTriangle(x: number, y: number, r: number) {
     ctx.beginPath();
-    ctx.moveTo(x, y - gridCell / 2 + gridPadding);
-    ctx.lineTo(x + gridCell / 2 - gridPadding, y + gridCell / 2 - gridPadding);
-    ctx.lineTo(x - gridCell / 2 + gridPadding, y + gridCell / 2 - gridPadding);
+    let sidelength = (r - gridPadding) * 2;
+    let height = Math.sqrt(sidelength ** 2 - (sidelength / 2) ** 2);
+
+    let xdist = sidelength / 2;
+    let ydist = height / 2;
+
+    ctx.moveTo(x, y - ydist);
+    ctx.lineTo(x + xdist, y + ydist);
+    ctx.lineTo(x - xdist, y + ydist);
     ctx.closePath();
   }
 
-  function fillTower(tower: Tower): void {
+  function pathTower(tower: Tower, sizeMultiplier: number = 1): void {
     let { x, y, type } = tower;
+
+    let size = (sizeMultiplier * gridCell) / 2;
 
     switch (type) {
       case "regular":
-        pathHexagon(
-          gridToFrame(x) + padding,
-          gridToFrame(y) + padding,
-          gridCell / 2
-        );
+        pathHexagon(gridToView(view, x), gridToView(view, y), size);
         break;
       case "attack":
-        pathTriangle(
-          gridToFrame(x) + padding,
-          gridToFrame(y) + padding,
-          gridCell / 2
-        );
+        pathTriangle(gridToView(view, x), gridToView(view, y), size);
         break;
       case "defense":
-        pathCircle(
-          gridToFrame(x) + padding,
-          gridToFrame(y) + padding,
-          gridCell / 2
-        );
+        pathCircle(gridToView(view, x), gridToView(view, y), size);
         break;
     }
-
-    ctx.fill();
   }
 };

@@ -3,6 +3,6 @@
     "experimentalDecorators": true,
     "jsxImportSource": "preact",
     "strictNullChecks": true,
-    "noImplicitAny": true
+    "noImplicitAny": true,
   }
 }

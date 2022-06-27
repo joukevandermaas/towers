@@ -1,36 +1,21 @@
 import { renderFrame } from "./render";
 import { DefaultGameState, tick } from "./tick";
+import { getViewState, initView, ViewState } from "./view";
 
-let canvas = document.querySelector("#main") as HTMLCanvasElement;
-let setSize = () => {
-  let rect = document.body.getBoundingClientRect();
-
-  canvas.width = rect.width;
-  canvas.height = rect.height;
-};
-
-window.onresize = setSize;
-setSize();
-
-let context = canvas.getContext("2d");
-if (context === null) {
-  throw new Error("Could not create context");
-}
-
-let ctx = context;
+let ctx = initView(20, 10);
 
 let prevstate = DefaultGameState;
 let state = DefaultGameState;
 
 let frameLoop = () => {
-  renderFrame(ctx, prevstate, state);
+  renderFrame(ctx, prevstate, state, getViewState());
   requestAnimationFrame(frameLoop);
 };
 
 let stateLoop = () => {
   let prev = state;
   prevstate = prev;
-  state = tick(state);
+  state = tick(state, getViewState());
   setTimeout(stateLoop, 50);
 };
 
