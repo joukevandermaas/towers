@@ -3,14 +3,25 @@ import { GameState, Team, Tower, TowerType } from "./tick";
 import { padding, ViewState } from "./view";
 
 const gridColor = "#101e36";
-const connectionColor = "white";
 export const gridPadding = 4;
 
+function hex2rgb(hex: string) {
+  let r = parseInt(hex.slice(1, 3), 16);
+  let g = parseInt(hex.slice(3, 5), 16);
+  let b = parseInt(hex.slice(5, 7), 16);
+
+  return `${r},${g},${b}`;
+}
+
+function rgba(color: string, alpha: number = 1.0) {
+  return `rgba(${color},${(alpha * 255).toFixed(0)})`;
+}
+
 const teamColors: Record<Team, string> = {
-  none: "#7f7f7f",
-  purple: "#7f38c7",
-  blue: "#386fc7",
-  red: "#c73865",
+  none: hex2rgb("#7f7f7f"),
+  purple: hex2rgb("#7f38c7"),
+  blue: hex2rgb("#386fc7"),
+  red: hex2rgb("#c73865"),
 };
 
 const hexAngle = (2 * Math.PI) / 6;
@@ -97,23 +108,25 @@ export const renderFrame = (
   }
 
   ctx.lineWidth = 7;
-  ctx.strokeStyle = connectionColor;
   for (let i = 0; i < connections.length; i++) {
     let c = connections[i];
 
-    ctx.strokeStyle = c.color;
-
-    let x1 = c.source.x;
-    let y1 = c.source.y;
-    let x2 = c.target.x;
-    let y2 = c.target.y;
+    let x1 = gridToView(view, c.source.x);
+    let y1 = gridToView(view, c.source.y);
+    let x2 = gridToView(view, c.target.x);
+    let y2 = gridToView(view, c.target.y);
 
     if (c.isTwoWay) {
       x2 = (x1 + x2) / 2;
       y2 = (y1 + y2) / 2;
     }
 
-    connectCells(x1, y1, x2, y2);
+    let gradient = ctx.createLinearGradient(x1, y1, x2, y2);
+    gradient.addColorStop(0, rgba(c.color, 0));
+    gradient.addColorStop(1, rgba(c.color, 1));
+    ctx.strokeStyle = gradient;
+
+    drawLine(x1, y1, x2, y2);
   }
 
   // draw soldiers
@@ -121,23 +134,15 @@ export const renderFrame = (
   ctx.lineWidth = 1;
   for (let i = 0; i < soldiers.length; i++) {
     let soldier = soldiers[i];
-    let color = teamColors[soldier.team];
+    let color = rgba(teamColors[soldier.team]);
 
     ctx.fillStyle = color;
 
-    pathCircle(
-      gridToView(view, soldier.x),
-      gridToView(view, soldier.y),
-      gridCell / 10
-    );
+    pathCircle(gridToView(view, soldier.x), gridToView(view, soldier.y), gridCell / 10);
 
     ctx.fill();
 
-    pathCircle(
-      gridToView(view, soldier.x),
-      gridToView(view, soldier.y),
-      gridCell / 10
-    );
+    pathCircle(gridToView(view, soldier.x), gridToView(view, soldier.y), gridCell / 10);
 
     ctx.stroke();
   }
@@ -148,7 +153,7 @@ export const renderFrame = (
   ctx.textBaseline = "middle";
   for (let i = 0; i < towers.length; i++) {
     let tower = towers[i];
-    let color = teamColors[tower.team];
+    let color = rgba(teamColors[tower.team]);
 
     let size = i === state.hovered && i !== state.active ? 1.2 : 1;
 
@@ -170,28 +175,11 @@ export const renderFrame = (
 
     let text = tower.value === tower.maxValue ? "max" : tower.value.toString();
 
-    ctx.strokeText(
-      text,
-      gridToView(view, tower.x),
-      gridToView(view, tower.y) + gridPadding
-    );
-    ctx.fillText(
-      text,
-      gridToView(view, tower.x),
-      gridToView(view, tower.y) + gridPadding
-    );
+    ctx.strokeText(text, gridToView(view, tower.x), gridToView(view, tower.y) + gridPadding);
+    ctx.fillText(text, gridToView(view, tower.x), gridToView(view, tower.y) + gridPadding);
   }
 
   // helpers
-  function connectCells(x1: number, y1: number, x2: number, y2: number) {
-    drawLine(
-      gridToView(view, x1),
-      gridToView(view, y1),
-      gridToView(view, x2),
-      gridToView(view, y2)
-    );
-  }
-
   function drawLine(x1: number, y1: number, x2: number, y2: number): void {
     ctx.beginPath();
     ctx.moveTo(x1, y1);
@@ -201,10 +189,7 @@ export const renderFrame = (
   function pathHexagon(x: number, y: number, r: number) {
     ctx.beginPath();
     for (var i = 0; i < 6; i++) {
-      ctx.lineTo(
-        x + r * Math.cos(hexAngle * i),
-        y + r * Math.sin(hexAngle * i)
-      );
+      ctx.lineTo(x + r * Math.cos(hexAngle * i), y + r * Math.sin(hexAngle * i));
     }
     ctx.closePath();
   }

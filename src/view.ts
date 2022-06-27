@@ -45,10 +45,7 @@ const currentViewState: ViewState = {
   clickEvent: null,
 };
 
-export const initView = (
-  gridWidth: number,
-  gridHeight: number
-): CanvasRenderingContext2D => {
+export const initView = (gridWidth: number, gridHeight: number): CanvasRenderingContext2D => {
   let canvas = document.querySelector("#main") as HTMLCanvasElement;
   let setSize = () => {
     let rect = document.body.getBoundingClientRect();
@@ -85,14 +82,8 @@ export const initView = (
     currentViewState.mousePosX = e.clientX;
     currentViewState.mousePosY = e.clientY;
 
-    currentViewState.gridMousePosX = viewToGridBound(
-      currentViewState,
-      e.clientX
-    );
-    currentViewState.gridMousePosY = viewToGridBound(
-      currentViewState,
-      e.clientY
-    );
+    currentViewState.gridMousePosX = viewToGridBound(currentViewState, e.clientX);
+    currentViewState.gridMousePosY = viewToGridBound(currentViewState, e.clientY);
   });
 
   canvas.addEventListener("mousedown", (e) => {

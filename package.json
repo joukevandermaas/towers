@@ -1,6 +1,9 @@
 {
   "name": "towers",
   "version": "1.0.0",
+  "prettier": {
+    "printWidth": 100
+  },
   "description": "",
   "dependencies": {
     "parcel": "^2.6.2"

@@ -1,4 +1,4 @@
-import { gridBoundToView, pointInRect } from "./helpers";
+import { gridBoundToView, lineCrossesRect, pointInRect } from "./helpers";
 import { ViewState } from "./view";
 
 const activeTowerDelayMin = 30;
@@ -72,26 +72,28 @@ export const DefaultGameState: GameState = {
       value: 65,
       type: "regular",
       team: "blue",
+      targets: [createTarget(3)],
     }),
     createTower({
       x: 10,
       y: 6,
       value: 65,
       type: "defense",
-      team: "blue",
+      team: "red",
+      targets: [createTarget(3)],
     }),
     createTower({
       x: 15,
       y: 4,
       value: 65,
       type: "attack",
-      team: "blue",
+      team: "purple",
+      targets: [createTarget(3)],
     }),
     createTower({
       x: 6,
       y: 4,
       value: 30,
-      type: "attack",
     }),
   ],
 
@@ -101,9 +103,7 @@ export const DefaultGameState: GameState = {
   active: null,
 };
 
-export function createTower(
-  options: Partial<Tower> & { x: number; y: number }
-): Tower {
+export function createTower(options: Partial<Tower> & { x: number; y: number }): Tower {
   return {
     x: options.x,
     y: options.y,
@@ -156,11 +156,7 @@ export function moveSoldier(
   };
 }
 
-export function createSoldier(
-  state: GameState,
-  sourceIndex: number,
-  targetIndex: number
-): Soldier {
+export function createSoldier(state: GameState, sourceIndex: number, targetIndex: number): Soldier {
   let source = state.towers[sourceIndex];
   let target = state.towers[targetIndex];
 
@@ -201,14 +197,7 @@ function getMaxTargets(tower: Tower) {
   return 1;
 }
 
-function hasPassed(
-  dx: number,
-  dy: number,
-  sx: number,
-  sy: number,
-  tx: number,
-  ty: number
-) {
+function hasPassed(dx: number, dy: number, sx: number, sy: number, tx: number, ty: number) {
   let reachedX = (dx >= 0 && sx >= tx) || (dx < 0 && sx <= tx);
   let reachedY = (dy >= 0 && sy >= ty) || (dy < 0 && sy <= ty);
 
@@ -225,11 +214,7 @@ function targetIndexOf(targets: Target[], index: number): number {
   return -1;
 }
 
-function createTargetConnection(
-  state: GameState,
-  sourceIndex: number,
-  targetIndex: number
-): void {
+function createTargetConnection(state: GameState, sourceIndex: number, targetIndex: number): void {
   let source = state.towers[sourceIndex];
   let target = state.towers[targetIndex];
 
@@ -243,6 +228,21 @@ function createTargetConnection(
     // connection already exists, remove it
     source.targets.splice(existingIndex, 1);
     return;
+  }
+
+  // look for collisions with other towers
+  for (let i = 0; i < state.towers.length; i++) {
+    if (i === sourceIndex || i === targetIndex) {
+      continue;
+    }
+
+    let other = state.towers[i];
+
+    let collides = lineCrossesRect(source.x, source.y, target.x, target.y, other.x, other.y, 1, 1);
+
+    if (collides) {
+      return;
+    }
   }
 
   // ok we can add the new connection source->target
@@ -296,7 +296,8 @@ export const tick = (state: GameState, view: ViewState): GameState => {
       }
 
       let other = s.soldiers[j];
-      if (soldier.target !== other.source) {
+      if (soldier.target !== other.source || soldier.source !== other.target) {
+        // need to be on the same line for collisions
         continue;
       }
 
@@ -305,16 +306,7 @@ export const tick = (state: GameState, view: ViewState): GameState => {
       }
 
       // collision with other soldiers
-      if (
-        hasPassed(
-          soldier.dx,
-          soldier.dy,
-          soldier.x,
-          soldier.y,
-          other.x,
-          other.y
-        )
-      ) {
+      if (hasPassed(soldier.dx, soldier.dy, soldier.x, soldier.y, other.x, other.y)) {
         let { attPower: sap, defPower: sdp } = soldier;
         let { attPower: tap, defPower: tdp } = other;
 
@@ -339,8 +331,7 @@ export const tick = (state: GameState, view: ViewState): GameState => {
       if (target.team === soldier.team) {
         if (target.value === target.maxValue && target.targets.length) {
           if (soldier.history.indexOf(soldier.target) === -1) {
-            let soldierTarget =
-              (target.nextPassThroughTarget + 1) % target.targets.length;
+            let soldierTarget = (target.nextPassThroughTarget + 1) % target.targets.length;
 
             let history = soldier.history;
             history.push(soldier.target);
@@ -364,6 +355,7 @@ export const tick = (state: GameState, view: ViewState): GameState => {
           target.team = soldier.team;
           target.value = 0;
           target.targets = [];
+          target.ticksSinceUpdate = 0;
         }
       }
     } else {
