@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Towers": {
+      "commandName": "Project",
+      "workingDirectory": "C:\\Users\\jouke\\source\\repos\\towers\\cs\\src"
+    }
+  }
+}
